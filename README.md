@@ -1,12 +1,12 @@
 # UnityCommonModule - Demos / Prototypes
 
-这个仓库计划用于沉淀“客户端通用模块”的可运行 Demo（先原型、后 Unity 化）。
+这个仓库用于沉淀“客户端通用模块”的可运行 Demo（先原型、后 Unity 化），并逐步演进为可复用的 Unity UPM 包。
 
 ## 当前内容
 
 ### RedDotTree（红点系统原型，C# Console）
 
-位置：`ConsoleApp1/`
+位置：`demos/reddot-tree-console/ConsoleApp1/`
 
 能力概览：
 - 树结构（入口级粒度）+ dirty/flush 批处理
@@ -18,14 +18,14 @@
 
 ## 运行
 
-在 `ConsoleApp1/` 目录：
+在 `demos/reddot-tree-console/ConsoleApp1/` 目录：
 
 ```bash
 dotnet run
 ```
 
 配置文件会通过 `CopyToOutputDirectory` 拷贝到输出目录：
-- `ConsoleApp1/Configs/reddot.json`
+- `demos/reddot-tree-console/ConsoleApp1/Configs/reddot.json`
 
 ## 以后怎么扩展（建议的仓库结构）
 
