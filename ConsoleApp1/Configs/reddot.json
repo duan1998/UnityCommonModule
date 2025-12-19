@@ -1,0 +1,21 @@
+{
+  "defaultPropagate": { "dot": -1, "new": -1, "super": -1 },
+  "nodes": [
+    { "id": "Root", "parentId": null, "aggregator": "AnyBool" },
+
+    { "id": "Mail", "parentId": "Root", "aggregator": "Sum" },
+    { "id": "Mail_System", "parentId": "Mail", "aggregator": "Sum" },
+    {
+      "id": "Mail_Friend",
+      "parentId": "Mail",
+      "aggregator": "Sum",
+      "propagate": { "dot": 1, "new": 0, "super": 2 }
+    },
+
+    { "id": "Quest", "parentId": "Root", "aggregator": "AnyBool" },
+    { "id": "Quest_Daily", "parentId": "Quest", "aggregator": "AnyBool" },
+    { "id": "Quest_Achievement", "parentId": "Quest", "aggregator": "AnyBool" }
+  ]
+}
+
+

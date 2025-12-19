@@ -1,0 +1,18 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Rider / IntelliJ
+.idea/
+*.DotSettings.user
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+Desktop.ini
+
+
