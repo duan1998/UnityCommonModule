@@ -2,6 +2,114 @@ using SequenceSystem.Steps.Flow;
 
 namespace SequenceSystem.Core;
 
+#region Facade Extension Methods
+
+/// <summary>
+/// Facade 扩展方法 - 让业务开发者可以用简单的方式添加步骤
+/// 业务代码不需要知道 ISequenceStep 的存在
+/// </summary>
+public static class SequenceFacade
+{
+    #region MainSequenceManager Extensions
+
+    /// <summary>
+    /// 添加一个同步动作（最简单的用法）
+    /// </summary>
+    /// <example>
+    /// SequenceManager.Instance.Main.Run(() => Debug.Log("Hello"));
+    /// </example>
+    public static void Run(this MainSequenceManager main, Action action)
+    {
+        main.Add(new ActionStep(action));
+    }
+
+    /// <summary>
+    /// 添加一个同步动作（带名称）
+    /// </summary>
+    public static void Run(this MainSequenceManager main, string name, Action action)
+    {
+        main.Add(new ActionStep(name, action));
+    }
+
+    /// <summary>
+    /// 添加延迟
+    /// </summary>
+    /// <example>
+    /// SequenceManager.Instance.Main.Delay(1.5f);
+    /// </example>
+    public static void Delay(this MainSequenceManager main, float seconds)
+    {
+        main.Add(new DelayStep(seconds));
+    }
+
+    /// <summary>
+    /// 添加条件步骤
+    /// </summary>
+    /// <example>
+    /// SequenceManager.Instance.Main.If(() => hp > 0, () => Debug.Log("Alive"));
+    /// </example>
+    public static void If(this MainSequenceManager main, Func<bool> condition, Action ifTrue, Action? ifFalse = null)
+    {
+        var ifTrueStep = new ActionStep("IfTrue", ifTrue);
+        var ifFalseStep = ifFalse != null ? new ActionStep("IfFalse", ifFalse) : null;
+        main.Add(new ConditionStep("If", condition, ifTrueStep, ifFalseStep));
+    }
+
+    /// <summary>
+    /// 添加等待条件步骤
+    /// </summary>
+    /// <example>
+    /// SequenceManager.Instance.Main.WaitUntil(() => isLoaded);
+    /// </example>
+    public static void WaitUntil(this MainSequenceManager main, Func<bool> condition)
+    {
+        main.Add(new AsyncActionStep("WaitUntil", () => { }, condition));
+    }
+
+    /// <summary>
+    /// 添加一组顺序执行的动作
+    /// </summary>
+    public static void Sequence(this MainSequenceManager main, params Action[] actions)
+    {
+        var steps = actions.Select((a, i) => (ISequenceStep)new ActionStep($"Seq[{i}]", a)).ToArray();
+        main.Add(new SequenceStep("Sequence", steps));
+    }
+
+    /// <summary>
+    /// 添加一组并行执行的动作（等待全部完成）
+    /// </summary>
+    public static void Parallel(this MainSequenceManager main, params Action[] actions)
+    {
+        var steps = actions.Select((a, i) => (ISequenceStep)new ActionStep($"Par[{i}]", a)).ToArray();
+        main.Add(new ParallelStep("Parallel", ParallelWaitMode.WaitAll, steps));
+    }
+
+    #endregion
+
+    #region SequencePlayer Extensions
+
+    /// <summary>
+    /// 快速创建并启动一个本地流程
+    /// </summary>
+    /// <example>
+    /// SequenceManager.Instance.RunLocal(
+    ///     () => Debug.Log("Step 1"),
+    ///     () => Debug.Log("Step 2")
+    /// );
+    /// </example>
+    public static SequencePlayer RunLocal(this SequenceManager mgr, params Action[] actions)
+    {
+        var steps = actions.Select((a, i) => (ISequenceStep)new ActionStep($"Local[{i}]", a)).ToList();
+        var player = mgr.CreateLocal(steps);
+        player.Play();
+        return player;
+    }
+
+    #endregion
+}
+
+#endregion
+
 /// <summary>
 /// 序列系统：统一管理层
 /// - Main: 全局主流程（跨模块协调，支持动态嵌套子步骤）

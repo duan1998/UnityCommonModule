@@ -2,7 +2,29 @@
 
 本目录是一个 Console 可运行 Demo，用于沉淀序列/演出系统的核心抽象与落地方式（先把"序列这件事"做对，再 Unity 化）。
 
-## 设计目标（你应该得到什么）
+## 设计理念
+
+> **框架的复杂性不应该暴露给业务开发者**
+
+本系统采用**分层设计**：
+- **底层**：完整的 Step 体系，支持复杂流程编排（给框架开发者）
+- **上层**：简洁的 Facade API，只需写 lambda（给业务开发者）
+
+```csharp
+// 业务开发者只需要这样写：
+SequenceManager.Instance.Main.Run(() => ShowReward());
+SequenceManager.Instance.Main.Delay(1.5f);
+SequenceManager.Instance.Main.If(() => hp > 0, () => Attack());
+
+// 或者用链式 Builder：
+SimpleSequence.Create()
+    .Do(() => Console.WriteLine("Hello"))
+    .Delay(1.0f)
+    .Do(() => Console.WriteLine("World"))
+    .Run();
+```
+
+## 设计目标
 
 - **动态嵌套子步骤**：任何 Step 执行时都可以动态产生子步骤，无需预先定义完整流程
 - **无限递归嵌套**：A → B → BB → BBB...，父步骤自动等待所有子步骤完成
@@ -10,6 +32,7 @@
 - **Main + Pool 架构**：全局主流程（跨模块协调）+ 命名流程池（独立并行）
 - **可观测性**：支持 Observer 模式，可监听步骤生命周期事件
 - **丰富的流程控制**：条件分支、并行执行、超时保护、重复执行、跳过等
+- **Facade API**：业务开发者无需了解 Step 概念，直接写 lambda
 
 ## Demo 位置与运行
 
@@ -182,11 +205,16 @@ SequenceSystem/
 │   ├── ISequenceStep.cs        # 基础接口
 │   ├── IStepContainer.cs       # 容器接口
 │   ├── ISequenceObserver.cs    # 观察者接口
+│   ├── ISequenceManager.cs     # DI 接口 + Mock
+│   ├── IDebuggableStep.cs      # 调试接口
 │   ├── SequencePlayer.cs       # 播放器
-│   └── SequenceSystem.cs       # 统一管理层
+│   ├── SequenceSystem.cs       # 统一管理层 + Facade
+│   ├── SequenceDebugger.cs     # 调试工具
+│   ├── StepFactory.cs          # 数据驱动工厂
+│   └── SimpleSequence.cs       # 链式 Builder
 ├── Steps/
 │   ├── Flow/                   # 流程控制 Step
-│   │   ├── ActionStep.cs
+│   │   ├── ActionStep.cs       # 同步/异步动作
 │   │   ├── ConditionStep.cs
 │   │   ├── DelayStep.cs
 │   │   ├── DynamicParentStep.cs
@@ -197,34 +225,127 @@ SequenceSystem/
 │   │   ├── SkipAwareStep.cs
 │   │   ├── SkippableStep.cs
 │   │   ├── SwitchStep.cs
-│   │   └── TimeoutStep.cs
+│   │   ├── TimeoutStep.cs
+│   │   └── TryStep.cs          # 错误处理
 │   └── Common/                 # 通用 Step
-│       ├── FakeAsyncStep.cs
-│       ├── LogStep.cs
-│       ├── SimAnimStep.cs
-│       ├── SimDoorStep.cs
-│       ├── SimMoveStep.cs
-│       ├── WaitSecondsStep.cs
-│       └── WaitSignalStep.cs
+│       └── ...
 ├── Adapters/
 │   └── ConsoleAdapter/         # Console 适配层
-│       ├── ConsoleSequenceObserver.cs
-│       ├── EnterHouseDemo.cs
-│       ├── GlobalSequenceDemo.cs
-│       ├── SequenceDriver.cs
-│       └── SequenceSystemDemo.cs
+│       ├── AdvancedFeaturesDemo.cs  # 高级功能演示
+│       ├── FacadeDemo.cs            # Facade API 演示
+│       ├── SequenceSystemDemo.cs    # 基础功能演示
+│       └── ...
 ├── Program.cs
 └── SequenceSystem.csproj
 ```
 
+## Facade API（业务开发者推荐）
+
+### 扩展方法
+
+```csharp
+var main = SequenceManager.Instance.Main;
+
+// 同步动作
+main.Run(() => DoSomething());
+main.Run("Named", () => DoSomething());
+
+// 延迟
+main.Delay(1.5f);
+
+// 条件
+main.If(() => hp > 0, () => Attack(), () => Retreat());
+
+// 等待条件
+main.WaitUntil(() => isLoaded);
+
+// 并行
+main.Parallel(() => LoadA(), () => LoadB(), () => LoadC());
+```
+
+### 链式 Builder
+
+```csharp
+SimpleSequence.Create("MyFlow")
+    .Do(() => Console.WriteLine("开始"))
+    .Delay(1.0f)
+    .If(() => hp > 50,
+        then: s => s.Do(() => Console.WriteLine("血量充足")),
+        @else: s => s.Do(() => Console.WriteLine("血量不足")))
+    .Parallel(
+        s => s.Do(() => LoadModel()),
+        s => s.Do(() => LoadTexture())
+    )
+    .Repeat(3, s => s.Do(() => Console.WriteLine("重复3次")))
+    .Run();
+```
+
+## 高级功能
+
+### 1. 错误处理（TryStep）
+
+```csharp
+new TryStep(
+    tryStep: new ActionStep(() => RiskyOperation()),
+    catchStep: new ActionStep(() => HandleError()),
+    finallyStep: new ActionStep(() => Cleanup())
+);
+```
+
+### 2. 调试工具
+
+```csharp
+var debugger = new SequenceDebugger();
+debugger.RecordStepEnter(step);
+debugger.RecordStepExit(step);
+debugger.PrintExecutionLog();
+debugger.PrintTimingStats();
+debugger.PrintStepTree(rootStep);
+```
+
+### 3. 中断机制
+
+```csharp
+// 紧急流程打断当前流程
+SequenceManager.Instance.Interrupt(new ActionStep(() => {
+    ShowUrgentMessage("服务器即将维护！");
+}));
+// 紧急流程完成后自动恢复主流程
+```
+
+### 4. 数据驱动
+
+```csharp
+var json = @"{
+    ""name"": ""LoginFlow"",
+    ""steps"": [
+        { ""type"": ""log"", ""message"": ""开始登录"" },
+        { ""type"": ""delay"", ""duration"": 1.0 },
+        { ""type"": ""log"", ""message"": ""登录完成"" }
+    ]
+}";
+var step = StepFactory.CreateFromJson(json);
+```
+
+### 5. 依赖注入
+
+```csharp
+// 注册
+SequenceServices.Register(mockManager);
+
+// 获取
+var manager = SequenceServices.Get();
+
+// 测试
+var mock = new MockSequenceManager();
+SequenceServices.Register(mock);
+```
+
 ## 扩展方向
 
-- **多通道**：支持多个独立的主流程通道
-- **优先级/中断**：高优先级流程可暂停/取消低优先级
-- **错误处理**：TryStep、OnError 回调
-- **数据驱动**：从配置/表格生成步骤序列
-- **可视化调试**：运行时步骤树展示
 - **Unity 集成**：MonoBehaviour 适配、协程支持
+- **可视化编辑器**：节点式流程编辑
+- **性能优化**：对象池、无 GC 执行
 
 ## 相关知识点
 

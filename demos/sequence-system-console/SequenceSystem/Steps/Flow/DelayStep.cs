@@ -2,14 +2,25 @@ using SequenceSystem.Core;
 
 namespace SequenceSystem.Steps.Flow;
 
-public sealed class DelayStep: ISequenceStep
+/// <summary>
+/// 延迟步骤 - 等待指定时间
+/// </summary>
+public sealed class DelayStep : ISequenceStep
 {
-    public string Name {get;}
-    public bool IsDone {get; private set;}
+    public string Name { get; }
+    public bool IsDone { get; private set; }
 
     private readonly float _duration;
     private float _remain;
 
+    /// <summary>
+    /// 创建延迟步骤（自动生成名称）
+    /// </summary>
+    public DelayStep(float seconds) : this($"Delay({seconds}s)", seconds) { }
+
+    /// <summary>
+    /// 创建延迟步骤（指定名称）
+    /// </summary>
     public DelayStep(string name, float seconds)
     {
         Name = name;
@@ -24,9 +35,8 @@ public sealed class DelayStep: ISequenceStep
 
     public void Tick(float dt)
     {
-        if(IsDone)
-            return;
-        
+        if (IsDone) return;
+
         _remain -= dt;
         if (_remain <= 0)
             IsDone = true;
