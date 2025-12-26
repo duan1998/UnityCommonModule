@@ -7,7 +7,7 @@ namespace SequenceSystem.Core;
 /// - Main: 全局主流程（跨模块协调，支持动态嵌套子步骤）
 /// - Pool: 命名流程池（局部/并行流程，独立执行）
 /// </summary>
-public sealed class SequenceManager
+public sealed class SequenceManager : ISequenceManager
 {
     public static SequenceManager Instance { get; } = new();
 
@@ -17,6 +17,8 @@ public sealed class SequenceManager
     /// 支持动态嵌套子步骤
     /// </summary>
     public MainSequenceManager Main { get; }
+    
+    IMainSequenceManager ISequenceManager.Main => Main;
 
     /// <summary>
     /// 命名流程池
@@ -145,6 +147,27 @@ public sealed class SequenceManager
 
     #endregion
 
+    #region Interrupt
+
+    /// <summary>
+    /// 中断当前流程，立即执行紧急流程
+    /// 紧急流程完成后自动恢复
+    /// </summary>
+    public void Interrupt(ISequenceStep urgentStep)
+    {
+        Main.Interrupt(urgentStep);
+    }
+
+    /// <summary>
+    /// 中断当前流程，执行一组紧急步骤
+    /// </summary>
+    public void Interrupt(IEnumerable<ISequenceStep> urgentSteps)
+    {
+        Main.Interrupt(urgentSteps);
+    }
+
+    #endregion
+
     #region Debug
 
     /// <summary>
@@ -168,14 +191,19 @@ public sealed class SequenceManager
 /// <summary>
 /// 主序列管理器：支持动态嵌套子步骤
 /// </summary>
-public sealed class MainSequenceManager
+public sealed class MainSequenceManager : IMainSequenceManager
 {
     private readonly DynamicQueueStep _mainSequence;
     private readonly SequencePlayer _player;
     private readonly Stack<IStepContainer> _contextStack = new();
+    
+    // 中断相关
+    private SequencePlayer? _interruptPlayer;
+    private bool _isInterrupted;
 
-    public bool IsPlaying => _player.IsPlaying;
+    public bool IsPlaying => _player.IsPlaying || (_interruptPlayer?.IsPlaying ?? false);
     public bool HasPending => _mainSequence.HasPending;
+    public bool IsInterrupted => _isInterrupted;
 
     internal MainSequenceManager()
     {
@@ -251,7 +279,7 @@ public sealed class MainSequenceManager
     /// </summary>
     public void Check()
     {
-        if (!_player.IsPlaying && _mainSequence.HasPending)
+        if (!_player.IsPlaying && _mainSequence.HasPending && !_isInterrupted)
         {
             Console.WriteLine("[Main] Check: starting player");
             _player.Play();
@@ -263,6 +291,22 @@ public sealed class MainSequenceManager
     /// </summary>
     public void Tick(float dt)
     {
+        // 如果有中断流程，优先执行中断
+        if (_isInterrupted && _interruptPlayer != null)
+        {
+            _interruptPlayer.Tick(dt);
+            
+            // 中断流程完成，恢复主流程
+            if (!_interruptPlayer.IsPlaying)
+            {
+                Console.WriteLine("[Main] Interrupt completed, resuming main flow");
+                _isInterrupted = false;
+                _interruptPlayer = null;
+                _player.Resume();
+            }
+            return;
+        }
+        
         _player.Tick(dt);
 
         // 如果执行完了但还有待执行的步骤，重新启动
@@ -270,6 +314,30 @@ public sealed class MainSequenceManager
         {
             _player.Play();
         }
+    }
+
+    /// <summary>
+    /// 中断当前流程，立即执行紧急流程
+    /// </summary>
+    public void Interrupt(ISequenceStep urgentStep)
+    {
+        Interrupt(new[] { urgentStep });
+    }
+
+    /// <summary>
+    /// 中断当前流程，执行一组紧急步骤
+    /// </summary>
+    public void Interrupt(IEnumerable<ISequenceStep> urgentSteps)
+    {
+        Console.WriteLine("[Main] INTERRUPT: Pausing main flow for urgent steps");
+        
+        // 暂停当前主流程
+        _player.Pause();
+        _isInterrupted = true;
+        
+        // 创建并启动中断流程
+        _interruptPlayer = new SequencePlayer(urgentSteps);
+        _interruptPlayer.Play();
     }
 
     /// <summary>
